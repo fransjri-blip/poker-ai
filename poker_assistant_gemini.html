@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Poker AI Assistant</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --green: #00ff87; --red: #ff4d4d; --yellow: #ffd166; --blue: #4db8ff;
+    --bg: #0a0e0a; --bg2: #111611; --bg3: #1a201a;
+    --border: #2a352a; --text: #e8f0e8; --text2: #7a9a7a;
+    --mono: 'IBM Plex Mono', monospace; --sans: 'IBM Plex Sans', sans-serif;
+  }
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; overflow-x: hidden; }
+  header { padding: 14px 16px 10px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: var(--bg2); }
+  .logo { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--green); letter-spacing: 0.08em; }
+  .logo span { color: var(--text2); font-weight: 400; }
+  .status-bar { font-family: var(--mono); font-size: 11px; color: var(--text2); display: flex; align-items: center; gap: 6px; }
+  .live-dot { width: 8px; height: 8px; border-radius: 50%; background: #444; }
+  .live-dot.on { background: var(--green); box-shadow: 0 0 6px var(--green); animation: blink 1.4s infinite; }
+  .live-dot.analyzing { background: var(--yellow); box-shadow: 0 0 6px var(--yellow); animation: blink 0.6s infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  .api-section { padding: 12px 16px; background: var(--bg2); border-bottom: 1px solid var(--border); }
+  .api-section label { font-family: var(--mono); font-size: 11px; color: var(--text2); display: block; margin-bottom: 6px; }
+  .api-section input { width: 100%; padding: 8px 10px; background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: var(--mono); font-size: 12px; outline: none; }
+  .api-section input:focus { border-color: var(--green); }
+  .api-note { font-family: var(--mono); font-size: 10px; color: var(--text2); margin-top: 5px; }
+  .api-note a { color: var(--green); text-decoration: none; }
+  .cam-section { position: relative; width: 100%; background: #000; aspect-ratio: 16/9; }
+  video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  canvas { display: none; }
+  .cam-placeholder { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: var(--bg2); }
+  .cam-placeholder p { font-family: var(--mono); font-size: 12px; color: var(--text2); text-align: center; padding: 0 2rem; line-height: 1.6; }
+  .controls { padding: 12px 16px; background: var(--bg2); border-bottom: 1px solid var(--border); display: flex; gap: 8px; }
+  .btn { flex: 1; padding: 10px 8px; font-family: var(--mono); font-size: 12px; font-weight: 600; border: 1px solid var(--border); border-radius: 6px; background: var(--bg3); color: var(--text2); cursor: pointer; letter-spacing: 0.04em; transition: all 0.15s; display: flex; align-items: center; justify-content: center; gap: 6px; }
+  .btn:active { transform: scale(0.96); }
+  .btn.primary { border-color: var(--green); color: var(--green); background: rgba(0,255,135,0.06); }
+  .btn.active { border-color: var(--red); color: var(--red); background: rgba(255,77,77,0.08); }
+  .btn:disabled { opacity: 0.3; cursor: not-allowed; }
+  .interval-row { padding: 10px 16px; background: var(--bg2); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; }
+  .interval-row label { font-family: var(--mono); font-size: 11px; color: var(--text2); white-space: nowrap; }
+  .interval-row input[type=range] { flex: 1; -webkit-appearance: none; height: 3px; background: var(--border); border-radius: 2px; outline: none; }
+  .interval-row input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: var(--green); cursor: pointer; }
+  .interval-row span { font-family: var(--mono); font-size: 12px; color: var(--green); min-width: 30px; }
+  .result-section { padding: 14px 16px; }
+  .empty { font-family: var(--mono); font-size: 12px; color: var(--text2); text-align: center; padding: 2rem 0; }
+  .decision-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .badge { display: inline-flex; align-items: center; gap: 5px; padding: 5px 14px; border-radius: 4px; font-family: var(--mono); font-size: 13px; font-weight: 600; letter-spacing: 0.06em; }
+  .badge-fold { background: rgba(255,77,77,0.15); color: var(--red); border: 1px solid rgba(255,77,77,0.3); }
+  .badge-call { background: rgba(255,209,102,0.15); color: var(--yellow); border: 1px solid rgba(255,209,102,0.3); }
+  .badge-raise { background: rgba(0,255,135,0.12); color: var(--green); border: 1px solid rgba(0,255,135,0.3); }
+  .badge-bluff { background: rgba(77,184,255,0.12); color: var(--blue); border: 1px solid rgba(77,184,255,0.3); }
+  .badge-nobluff { background: rgba(122,154,122,0.1); color: var(--text2); border: 1px solid var(--border); }
+  .block { margin-bottom: 14px; }
+  .block-label { font-family: var(--mono); font-size: 10px; font-weight: 600; color: var(--text2); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 6px; padding-bottom: 5px; border-bottom: 1px solid var(--border); }
+  .block-text { font-size: 13px; line-height: 1.7; color: var(--text); }
+  .divider { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
+  .timestamp { font-family: var(--mono); font-size: 10px; color: var(--text2); margin-top: 14px; }
+  .preview-img { width: calc(100% - 32px); margin: 0 16px; border-radius: 6px; display: none; border: 1px solid var(--border); opacity: 0.6; }
+  /* debug log */
+  .debug-box { margin: 10px 16px; padding: 10px; background: #0d0d0d; border: 1px solid #333; border-radius: 6px; font-family: var(--mono); font-size: 11px; color: #aaa; max-height: 120px; overflow-y: auto; word-break: break-all; }
+  .debug-box .err { color: var(--red); }
+  .debug-box .ok { color: var(--green); }
+  .debug-box .info { color: var(--yellow); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">POKER<span>.AI</span></div>
+  <div class="status-bar">
+    <span class="live-dot" id="dot"></span>
+    <span id="status-txt">offline</span>
+  </div>
+</header>
+
+<div class="api-section">
+  <label>GOOGLE GEMINI API KEY (gratuito)</label>
+  <input type="password" id="api-key" placeholder="AIza..." autocomplete="off" />
+  <p class="api-note">Obtenha em <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a> — sem cartão</p>
+</div>
+
+<div class="cam-section">
+  <video id="vid" autoplay playsinline muted></video>
+  <canvas id="cnv"></canvas>
+  <div class="cam-placeholder" id="placeholder">
+    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="1.5">
+      <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/>
+      <circle cx="12" cy="13" r="4"/>
+    </svg>
+    <p>Insira a API key, toque em<br>INICIAR e aponte para o PC</p>
+  </div>
+</div>
+
+<div class="controls">
+  <button class="btn primary" id="btn-start" onclick="startCam()">▶ INICIAR</button>
+  <button class="btn" id="btn-auto" onclick="toggleAuto()" disabled>⟳ AUTO</button>
+  <button class="btn" id="btn-snap" onclick="snapAndAnalyze()" disabled>◎ ANALISAR</button>
+</div>
+
+<div class="interval-row">
+  <label>INTERVALO</label>
+  <input type="range" id="interval" min="5" max="30" step="1" value="10"
+    oninput="document.getElementById('iv-out').textContent=this.value+'s'">
+  <span id="iv-out">10s</span>
+</div>
+
+<img class="preview-img" id="preview" alt="frame analisado" />
+
+<div class="debug-box" id="debug-box">// log de diagnóstico</div>
+
+<div class="result-section" id="result-section">
+  <p class="empty">// aguardando análise...</p>
+</div>
+
+<script>
+let stream = null, autoTimer = null, isAuto = false;
+const vid = document.getElementById('vid');
+const cnv = document.getElementById('cnv');
+const placeholder = document.getElementById('placeholder');
+const dot = document.getElementById('dot');
+const statusTxt = document.getElementById('status-txt');
+const preview = document.getElementById('preview');
+const resultSection = document.getElementById('result-section');
+const debugBox = document.getElementById('debug-box');
+const btnAuto = document.getElementById('btn-auto');
+const btnSnap = document.getElementById('btn-snap');
+const btnStart = document.getElementById('btn-start');
+
+function log(msg, type='info') {
+  const line = document.createElement('div');
+  line.className = type;
+  line.textContent = '[' + new Date().toLocaleTimeString('pt-BR') + '] ' + msg;
+  debugBox.appendChild(line);
+  debugBox.scrollTop = debugBox.scrollHeight;
+}
+
+async function startCam() {
+  try {
+    log('solicitando câmera...');
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false
+    });
+    vid.srcObject = stream;
+    placeholder.style.display = 'none';
+    dot.className = 'live-dot on';
+    statusTxt.textContent = 'câmera ativa';
+    btnStart.disabled = true;
+    btnStart.textContent = '✓ ATIVO';
+    btnAuto.disabled = false;
+    btnSnap.disabled = false;
+    log('câmera ok — ' + (stream.getVideoTracks()[0]?.label || 'sem label'), 'ok');
+  } catch(e) {
+    log('ERRO câmera: ' + e.message, 'err');
+    statusTxt.textContent = 'erro câmera';
+  }
+}
+
+function getApiKey() { return document.getElementById('api-key').value.trim(); }
+
+function getFrame() {
+  const w = vid.videoWidth || 640, h = vid.videoHeight || 360;
+  cnv.width = w; cnv.height = h;
+  cnv.getContext('2d').drawImage(vid, 0, 0, w, h);
+  const data = cnv.toDataURL('image/jpeg', 0.7);
+  log('frame capturado: ' + w + 'x' + h + ' (' + Math.round(data.length/1024) + 'KB)');
+  return data.split(',')[1];
+}
+
+function renderResult(text) {
+  const decMatch = text.match(/DECISÃO:\s*(FOLD|CALL|RAISE|BET)[^\n]*/i);
+  const sizMatch = text.match(/SIZING:\s*([^\n]+)/i);
+  const bluffMatch = text.match(/BLEFE:\s*(SIM|NÃO|NAO|PARCIAL)[^\n]*/i);
+  const bluffSizMatch = text.match(/SIZING DO BLEFE:\s*([^\n]+)/i);
+  const reasonMatch = text.match(/RACIOCÍNIO:\s*([\s\S]*?)(?=BLEFE:|$)/i);
+  const bluffReasonMatch = text.match(/MOTIVO DO BLEFE:\s*([\s\S]*?)$/i);
+
+  const dec = decMatch ? decMatch[1].toUpperCase() : null;
+  const sizing = sizMatch ? sizMatch[1].trim() : null;
+  const bluff = bluffMatch ? bluffMatch[1].toUpperCase().replace('NAO','NÃO') : null;
+  const bluffSiz = bluffSizMatch ? bluffSizMatch[1].trim() : null;
+  const reason = reasonMatch ? reasonMatch[1].trim() : text;
+  const bluffReason = bluffReasonMatch ? bluffReasonMatch[1].trim() : null;
+
+  let html = '<div class="decision-row">';
+  if(dec) {
+    const cls = dec==='FOLD'?'badge-fold':dec==='CALL'?'badge-call':'badge-raise';
+    const icon = dec==='FOLD'?'✕':dec==='CALL'?'→':'↑';
+    html += `<span class="badge ${cls}">${icon} ${dec}`;
+    if(sizing) html += ` · ${sizing}`;
+    html += '</span>';
+  }
+  if(bluff === 'SIM') {
+    html += `<span class="badge badge-bluff">◈ BLEFE`;
+    if(bluffSiz) html += ` · ${bluffSiz}`;
+    html += '</span>';
+  } else if(bluff === 'PARCIAL') {
+    html += `<span class="badge badge-bluff">◈ BLEFE SITUACIONAL</span>`;
+  } else if(bluff === 'NÃO') {
+    html += `<span class="badge badge-nobluff">— sem blefe</span>`;
+  }
+  html += '</div>';
+  if(reason) html += `<div class="block"><div class="block-label">análise</div><div class="block-text">${reason}</div></div>`;
+  if(bluffReason) html += `<hr class="divider"><div class="block"><div class="block-label">avaliação de blefe</div><div class="block-text">${bluffReason}</div></div>`;
+  html += `<p class="timestamp">// ${new Date().toLocaleTimeString('pt-BR')}</p>`;
+  resultSection.innerHTML = html;
+}
+
+async function snapAndAnalyze() {
+  const apiKey = getApiKey();
+  if(!apiKey) { log('ERRO: API key vazia', 'err'); alert('Insira a API key do Gemini.'); return; }
+  if(!stream) return;
+
+  dot.className = 'live-dot analyzing';
+  statusTxt.textContent = 'analisando...';
+  resultSection.innerHTML = '<p class="empty">// lendo mesa...</p>';
+
+  const b64 = getFrame();
+  preview.src = 'data:image/jpeg;base64,' + b64;
+  preview.style.display = 'block';
+
+  const prompt = `Você é um coach profissional de poker Texas Hold'em. Analise esta imagem da tela de poker e responda EXATAMENTE neste formato (em português):
+
+DECISÃO: [FOLD / CALL / RAISE / BET]
+SIZING: [valor exato em BB ou % do pot]
+RACIOCÍNIO: [2-3 linhas explicando pot odds, equity estimada e posição]
+BLEFE: [SIM / NÃO / PARCIAL]
+SIZING DO BLEFE: [valor exato se SIM ou PARCIAL, senão deixe vazio]
+MOTIVO DO BLEFE: [2-3 linhas de justificativa]
+
+Identifique da imagem: cartas do herói, board, pot, stacks, posição e fase. Estime o que não estiver visível.`;
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
+  log('chamando Gemini API...');
+
+  try {
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { inline_data: { mime_type: 'image/jpeg', data: b64 } },
+            { text: prompt }
+          ]
+        }],
+        generationConfig: { maxOutputTokens: 600, temperature: 0.3 }
+      })
+    });
+
+    log('HTTP status: ' + resp.status);
+    const raw = await resp.text();
+    log('resposta raw (' + raw.length + ' chars): ' + raw.substring(0, 120) + '...');
+
+    let data;
+    try { data = JSON.parse(raw); } catch(pe) { throw new Error('JSON inválido: ' + raw.substring(0, 200)); }
+
+    if(data.error) throw new Error(data.error.message + ' (code ' + data.error.code + ')');
+
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if(!text) throw new Error('Sem texto na resposta: ' + JSON.stringify(data).substring(0, 200));
+
+    log('análise ok (' + text.length + ' chars)', 'ok');
+    renderResult(text);
+    dot.className = 'live-dot on';
+    statusTxt.textContent = 'análise ok';
+  } catch(e) {
+    log('ERRO: ' + e.message, 'err');
+    resultSection.innerHTML = `<p class="empty" style="color:var(--red)">// erro — veja log abaixo</p>`;
+    dot.className = 'live-dot';
+    statusTxt.textContent = 'erro';
+  }
+}
+
+function toggleAuto() {
+  isAuto = !isAuto;
+  if(isAuto) {
+    const iv = parseInt(document.getElementById('interval').value) * 1000;
+    btnAuto.textContent = '■ PARAR';
+    btnAuto.classList.add('active');
+    snapAndAnalyze();
+    autoTimer = setInterval(snapAndAnalyze, iv);
+    statusTxt.textContent = 'automático';
+  } else {
+    clearInterval(autoTimer);
+    btnAuto.textContent = '⟳ AUTO';
+    btnAuto.classList.remove('active');
+    dot.className = 'live-dot on';
+    statusTxt.textContent = 'pausado';
+  }
+}
+
+document.getElementById('interval').addEventListener('change', () => {
+  if(isAuto) {
+    clearInterval(autoTimer);
+    autoTimer = setInterval(snapAndAnalyze, parseInt(document.getElementById('interval').value)*1000);
+  }
+});
+</script>
+</body>
+</html>
